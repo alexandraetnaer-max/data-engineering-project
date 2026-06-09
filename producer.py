@@ -3,6 +3,7 @@ import json
 import time
 from kafka import KafkaProducer
 import os
+from datetime import datetime
 
 KAFKA_BROKER = os.environ.get('KAFKA_BROKER', 'localhost:9092')
 TOPIC = 'sensor-data'
@@ -15,7 +16,8 @@ def get_sensor_data():
         "current": ["temperature_2m", "relative_humidity_2m", "wind_speed_10m"],
         "timezone": "Europe/Berlin"
     }
-    response = requests.get(url, params=params)
+    response = requests.get(url, params=params, timeout=10)
+    response.raise_for_status()
     data = response.json()
     current = data["current"]
     return {
@@ -23,14 +25,16 @@ def get_sensor_data():
         "temperature": current["temperature_2m"],
         "humidity": current["relative_humidity_2m"],
         "wind_speed": current["wind_speed_10m"],
-        "location": "Berlin"
+        "location": "Berlin",
+        "status": "ok",
+        "fetched_at": datetime.utcnow().isoformat()
     }
 
 def main():
     print("Starting producer...", flush=True)
     print(f"Connecting to Kafka at {KAFKA_BROKER}", flush=True)
     time.sleep(40)
-    
+
     while True:
         try:
             print("Trying to connect to Redpanda...", flush=True)
@@ -43,15 +47,35 @@ def main():
         except Exception as e:
             print(f"Connection failed: {e}", flush=True)
             time.sleep(10)
-    
+
     while True:
         try:
             data = get_sensor_data()
             producer.send(TOPIC, value=data)
-            print(f"Sent: {data}", flush=True)
+            print(f"[HEALTH OK] Data sent at {data['fetched_at']}: {data}", flush=True)
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            error = {
+                "status": "error",
+                "error_type": "timeout",
+                "message": "API request timed out",
+                "fetched_at": datetime.utcnow().isoformat()
+            }
+            producer.send(TOPIC, value=error)
+            print(f"[HEALTH ERROR] API timeout at {error['fetched_at']}", flush=True)
+            time.sleep(10)
+        except requests.exceptions.ConnectionError:
+            error = {
+                "status": "error",
+                "error_type": "connection_error",
+                "message": "API is unavailable",
+                "fetched_at": datetime.utcnow().isoformat()
+            }
+            producer.send(TOPIC, value=error)
+            print(f"[HEALTH ERROR] API unavailable at {error['fetched_at']}", flush=True)
             time.sleep(10)
         except Exception as e:
-            print(f"Error: {e}", flush=True)
+            print(f"[HEALTH ERROR] Unexpected error: {e}", flush=True)
             time.sleep(5)
 
 if __name__ == "__main__":
