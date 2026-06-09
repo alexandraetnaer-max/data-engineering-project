@@ -46,7 +46,7 @@ def wait_for_kafka():
                 # Consumer group ID for offset tracking
                 group_id='sensor-group',
                 # Timeout for connection attempt in milliseconds
-                request_timeout_ms=5000
+                request_timeout_ms=30000
             )
             print("[KAFKA] Successfully connected to Redpanda!", flush=True)
             return consumer

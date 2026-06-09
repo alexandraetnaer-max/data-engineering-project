@@ -40,7 +40,7 @@ def wait_for_kafka():
                 # Serialize Python dict to JSON bytes before sending
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'),
                 # Timeout for connection attempt in milliseconds
-                request_timeout_ms=5000
+                request_timeout_ms=30000
             )
             print("[KAFKA] Successfully connected to Redpanda!", flush=True)
             return producer
