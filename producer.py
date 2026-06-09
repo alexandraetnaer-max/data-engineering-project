@@ -2,12 +2,14 @@
 # PRODUCER SCRIPT
 # Purpose: Fetches real-time environmental data from Open-Meteo API
 #          and sends it to Redpanda (Kafka-compatible message broker)
+# Uses retry loops with healthchecks instead of fixed sleep delays
 # =============================================================================
 
 import requests      # For making HTTP requests to Open-Meteo API
 import json          # For converting data to JSON format
-import time          # For adding delays between requests
+import time          # For adding delays between retries
 from kafka import KafkaProducer  # For sending messages to Redpanda
+from kafka.errors import NoBrokersAvailable  # Specific Kafka connection error
 import os            # For reading environment variables
 from datetime import datetime    # For timestamps in health monitoring
 
@@ -17,6 +19,44 @@ from datetime import datetime    # For timestamps in health monitoring
 # =============================================================================
 KAFKA_BROKER = os.environ.get('KAFKA_BROKER', 'localhost:9092')  # Redpanda address
 TOPIC = 'sensor-data'  # Name of the Kafka topic to send data to
+MAX_RETRIES = 10        # Maximum number of connection attempts
+RETRY_DELAY = 5         # Seconds to wait between retries
+
+# =============================================================================
+# FUNCTION: wait_for_kafka
+# Retries connection to Redpanda until successful or max retries reached
+# Returns KafkaProducer instance when connected
+# =============================================================================
+def wait_for_kafka():
+    attempt = 0
+    while attempt < MAX_RETRIES:
+        try:
+            attempt += 1
+            print(f"[KAFKA] Connection attempt {attempt}/{MAX_RETRIES}...", flush=True)
+            
+            # Try to create Kafka producer - will fail if Redpanda not ready
+            producer = KafkaProducer(
+                bootstrap_servers=KAFKA_BROKER,
+                # Serialize Python dict to JSON bytes before sending
+                value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+                # Timeout for connection attempt in milliseconds
+                request_timeout_ms=5000
+            )
+            print("[KAFKA] Successfully connected to Redpanda!", flush=True)
+            return producer
+            
+        except NoBrokersAvailable:
+            # Redpanda not ready yet - wait and retry
+            print(f"[KAFKA] No brokers available. Retrying in {RETRY_DELAY}s...", flush=True)
+            time.sleep(RETRY_DELAY)
+            
+        except Exception as e:
+            # Other connection error - wait and retry
+            print(f"[KAFKA] Connection failed: {e}. Retrying in {RETRY_DELAY}s...", flush=True)
+            time.sleep(RETRY_DELAY)
+    
+    # All retries exhausted
+    raise RuntimeError(f"Could not connect to Redpanda after {MAX_RETRIES} attempts")
 
 # =============================================================================
 # FUNCTION: get_sensor_data
@@ -66,29 +106,10 @@ def get_sensor_data():
 # =============================================================================
 def main():
     print("Starting producer...", flush=True)
-    print(f"Connecting to Kafka at {KAFKA_BROKER}", flush=True)
-    
-    # Wait for Redpanda to fully start before connecting
-    time.sleep(40)
+    print(f"Kafka broker: {KAFKA_BROKER}", flush=True)
 
-    # Retry loop: keep trying to connect until successful
-    while True:
-        try:
-            print("Trying to connect to Redpanda...", flush=True)
-            
-            # Create Kafka producer with JSON serialization
-            producer = KafkaProducer(
-                bootstrap_servers=KAFKA_BROKER,
-                # Serialize Python dict to JSON bytes before sending
-                value_serializer=lambda v: json.dumps(v).encode('utf-8')
-            )
-            print("Connected to Redpanda!", flush=True)
-            break  # Exit retry loop on successful connection
-            
-        except Exception as e:
-            # Connection failed - log error and retry after 10 seconds
-            print(f"Connection failed: {e}", flush=True)
-            time.sleep(10)
+    # Wait for Redpanda using healthcheck retry loop
+    producer = wait_for_kafka()
 
     # Main data collection loop: runs continuously
     while True:
