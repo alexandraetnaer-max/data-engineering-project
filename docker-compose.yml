@@ -49,6 +49,7 @@ services:
       context: .
       dockerfile: Dockerfile.producer  # Build from Dockerfile.producer
     container_name: producer
+    restart: unless-stopped    # Auto-restart if container crashes
     depends_on:
       - redpanda   # Wait for Redpanda to start first
     environment:
@@ -63,6 +64,7 @@ services:
       context: .
       dockerfile: Dockerfile.consumer  # Build from Dockerfile.consumer
     container_name: consumer
+    restart: unless-stopped    # Auto-restart if container crashes
     depends_on:
       - redpanda   # Wait for Redpanda to start first
       - mongodb    # Wait for MongoDB to start first
