@@ -1,9 +1,17 @@
+# Base image: lightweight Python 3.11
 FROM python:3.11-slim
 
+# Set working directory inside container
 WORKDIR /app
 
-RUN pip install kafka-python pymongo
+# Copy requirements file first (for Docker layer caching)
+COPY requirements.txt .
 
+# Install Python dependencies with fixed versions
+RUN pip install -r requirements.txt
+
+# Copy consumer script into container
 COPY consumer.py .
 
+# Run consumer script when container starts
 CMD ["python", "consumer.py"]
