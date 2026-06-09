@@ -14,7 +14,7 @@ services:
   # Lightweight alternative to Apache Kafka
   # ---------------------------------------------------------------------------
   redpanda:
-    image: redpandadata/redpanda:latest
+    image: redpandadata/redpanda:v24.1.1
     container_name: redpanda
     command:
       - redpanda start
@@ -33,7 +33,7 @@ services:
   # Chosen for flexible schema - future sensors can add new fields easily
   # ---------------------------------------------------------------------------
   mongodb:
-    image: mongo:6.0
+    image: mongo:6.0.14
     container_name: mongodb
     ports:
       - "27017:27017"  # MongoDB default port
