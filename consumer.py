@@ -3,15 +3,29 @@
 # Purpose: Reads sensor data messages from Redpanda (Kafka-compatible broker)
 #          and stores them in MongoDB database
 # Uses retry loops with healthchecks instead of fixed sleep delays
+# Uses Python logging module for professional log output
 # =============================================================================
 
 import json          # For deserializing JSON messages from Redpanda
 import time          # For adding delays between retries
+import logging       # For professional logging with levels and timestamps
 from kafka import KafkaConsumer  # For reading messages from Redpanda
 from kafka.errors import NoBrokersAvailable  # Specific Kafka connection error
 from pymongo import MongoClient  # For connecting to MongoDB database
 from pymongo.errors import ConnectionFailure  # Specific MongoDB connection error
 import os            # For reading environment variables
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# Format: timestamp - level - message
+# Levels: DEBUG < INFO < WARNING < ERROR < CRITICAL
+# =============================================================================
+logging.basicConfig(
+    level=logging.INFO,  # Show INFO and above (INFO, WARNING, ERROR, CRITICAL)
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Log format
+    datefmt='%Y-%m-%d %H:%M:%S'  # Timestamp format
+)
+logger = logging.getLogger(__name__)  # Create logger for this module
 
 # =============================================================================
 # CONFIGURATION
@@ -33,7 +47,7 @@ def wait_for_kafka():
     while attempt < MAX_RETRIES:
         try:
             attempt += 1
-            print(f"[KAFKA] Connection attempt {attempt}/{MAX_RETRIES}...", flush=True)
+            logger.info(f"[KAFKA] Connection attempt {attempt}/{MAX_RETRIES}...")
             
             # Try to create Kafka consumer - will fail if Redpanda not ready
             consumer = KafkaConsumer(
@@ -48,20 +62,21 @@ def wait_for_kafka():
                 # Timeout for connection attempt in milliseconds
                 request_timeout_ms=30000
             )
-            print("[KAFKA] Successfully connected to Redpanda!", flush=True)
+            logger.info("[KAFKA] Successfully connected to Redpanda!")
             return consumer
             
         except NoBrokersAvailable:
             # Redpanda not ready yet - wait and retry
-            print(f"[KAFKA] No brokers available. Retrying in {RETRY_DELAY}s...", flush=True)
+            logger.warning(f"[KAFKA] No brokers available. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
             
         except Exception as e:
             # Other connection error - wait and retry
-            print(f"[KAFKA] Connection failed: {e}. Retrying in {RETRY_DELAY}s...", flush=True)
+            logger.error(f"[KAFKA] Connection failed: {e}. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
     
     # All retries exhausted
+    logger.critical(f"[KAFKA] Could not connect after {MAX_RETRIES} attempts. Exiting.")
     raise RuntimeError(f"Could not connect to Redpanda after {MAX_RETRIES} attempts")
 
 # =============================================================================
@@ -74,9 +89,9 @@ def wait_for_mongodb():
     while attempt < MAX_RETRIES:
         try:
             attempt += 1
-            print(f"[MONGODB] Connection attempt {attempt}/{MAX_RETRIES}...", flush=True)
+            logger.info(f"[MONGODB] Connection attempt {attempt}/{MAX_RETRIES}...")
             
-            # Create MongoDB client
+            # Create MongoDB client with timeout
             client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
             
             # Force connection check - will raise error if MongoDB not ready
@@ -86,20 +101,21 @@ def wait_for_mongodb():
             db = client['sensordata']           # Database name
             collection = db['measurements']     # Collection (table) name
             
-            print("[MONGODB] Successfully connected to MongoDB!", flush=True)
+            logger.info("[MONGODB] Successfully connected to MongoDB!")
             return collection
             
         except ConnectionFailure:
             # MongoDB not ready yet - wait and retry
-            print(f"[MONGODB] Not available. Retrying in {RETRY_DELAY}s...", flush=True)
+            logger.warning(f"[MONGODB] Not available. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
             
         except Exception as e:
             # Other connection error - wait and retry
-            print(f"[MONGODB] Connection failed: {e}. Retrying in {RETRY_DELAY}s...", flush=True)
+            logger.error(f"[MONGODB] Connection failed: {e}. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
     
     # All retries exhausted
+    logger.critical(f"[MONGODB] Could not connect after {MAX_RETRIES} attempts. Exiting.")
     raise RuntimeError(f"Could not connect to MongoDB after {MAX_RETRIES} attempts")
 
 # =============================================================================
@@ -107,40 +123,44 @@ def wait_for_mongodb():
 # Sets up connections and continuously reads and stores incoming sensor data
 # =============================================================================
 def main():
-    print("Starting consumer...", flush=True)
-    print(f"Kafka broker: {KAFKA_BROKER}", flush=True)
-    print(f"MongoDB URI: {MONGO_URI}", flush=True)
+    logger.info("Starting consumer...")
+    logger.info(f"Kafka broker: {KAFKA_BROKER}")
+    logger.info(f"MongoDB URI: {MONGO_URI}")
 
     # Wait for Redpanda using healthcheck retry loop
     consumer = wait_for_kafka()
-    
+
     # Wait for MongoDB using healthcheck retry loop
     collection = wait_for_mongodb()
 
-    print("All connections established! Waiting for messages...", flush=True)
+    logger.info("All connections established! Waiting for messages...")
 
     # Main message processing loop: runs continuously
-    # Waits for new messages from Redpanda and stores them
     for message in consumer:
         try:
             # Extract data from Kafka message
             data = message.value
-            
+
             # Store measurement document in MongoDB
-            # MongoDB automatically adds '_id' field
             collection.insert_one(data)
-            
-            # Log stored measurement with health status
+
+            # Log based on health status
             if data.get('status') == 'ok':
                 # Normal sensor reading - log success
-                print(f"[OK] Saved to MongoDB: {data}", flush=True)
+                logger.info(f"[OK] Saved: temp={data.get('temperature')}°C, "
+                           f"humidity={data.get('humidity')}%, "
+                           f"wind={data.get('wind_speed')}km/h, "
+                           f"at={data.get('fetched_at')}")
             else:
                 # Health error from producer - log warning
-                print(f"[WARNING] Health error received: {data}", flush=True)
-                
+                logger.warning(f"[HEALTH WARNING] Error received: "
+                              f"type={data.get('error_type')}, "
+                              f"message={data.get('message')}, "
+                              f"at={data.get('fetched_at')}")
+
         except Exception as e:
             # Unexpected error - log and continue processing
-            print(f"[ERROR] Failed to save to MongoDB: {e}", flush=True)
+            logger.error(f"[ERROR] Failed to save to MongoDB: {e}")
 
 # Entry point: run main function when script is executed
 if __name__ == "__main__":

@@ -3,15 +3,29 @@
 # Purpose: Fetches real-time environmental data from Open-Meteo API
 #          and sends it to Redpanda (Kafka-compatible message broker)
 # Uses retry loops with healthchecks instead of fixed sleep delays
+# Uses Python logging module for professional log output
 # =============================================================================
 
 import requests      # For making HTTP requests to Open-Meteo API
 import json          # For converting data to JSON format
 import time          # For adding delays between retries
+import logging       # For professional logging with levels and timestamps
 from kafka import KafkaProducer  # For sending messages to Redpanda
 from kafka.errors import NoBrokersAvailable  # Specific Kafka connection error
 import os            # For reading environment variables
 from datetime import datetime    # For timestamps in health monitoring
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# Format: timestamp - level - message
+# Levels: DEBUG < INFO < WARNING < ERROR < CRITICAL
+# =============================================================================
+logging.basicConfig(
+    level=logging.INFO,  # Show INFO and above (INFO, WARNING, ERROR, CRITICAL)
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Log format
+    datefmt='%Y-%m-%d %H:%M:%S'  # Timestamp format
+)
+logger = logging.getLogger(__name__)  # Create logger for this module
 
 # =============================================================================
 # CONFIGURATION
@@ -32,7 +46,7 @@ def wait_for_kafka():
     while attempt < MAX_RETRIES:
         try:
             attempt += 1
-            print(f"[KAFKA] Connection attempt {attempt}/{MAX_RETRIES}...", flush=True)
+            logger.info(f"[KAFKA] Connection attempt {attempt}/{MAX_RETRIES}...")
             
             # Try to create Kafka producer - will fail if Redpanda not ready
             producer = KafkaProducer(
@@ -42,20 +56,21 @@ def wait_for_kafka():
                 # Timeout for connection attempt in milliseconds
                 request_timeout_ms=30000
             )
-            print("[KAFKA] Successfully connected to Redpanda!", flush=True)
+            logger.info("[KAFKA] Successfully connected to Redpanda!")
             return producer
             
         except NoBrokersAvailable:
             # Redpanda not ready yet - wait and retry
-            print(f"[KAFKA] No brokers available. Retrying in {RETRY_DELAY}s...", flush=True)
+            logger.warning(f"[KAFKA] No brokers available. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
             
         except Exception as e:
             # Other connection error - wait and retry
-            print(f"[KAFKA] Connection failed: {e}. Retrying in {RETRY_DELAY}s...", flush=True)
+            logger.error(f"[KAFKA] Connection failed: {e}. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
     
     # All retries exhausted
+    logger.critical(f"[KAFKA] Could not connect after {MAX_RETRIES} attempts. Exiting.")
     raise RuntimeError(f"Could not connect to Redpanda after {MAX_RETRIES} attempts")
 
 # =============================================================================
@@ -105,8 +120,8 @@ def get_sensor_data():
 # Sets up Kafka producer and continuously sends sensor data to Redpanda
 # =============================================================================
 def main():
-    print("Starting producer...", flush=True)
-    print(f"Kafka broker: {KAFKA_BROKER}", flush=True)
+    logger.info("Starting producer...")
+    logger.info(f"Kafka broker: {KAFKA_BROKER}")
 
     # Wait for Redpanda using healthcheck retry loop
     producer = wait_for_kafka()
@@ -120,8 +135,11 @@ def main():
             # Send data to Redpanda topic
             producer.send(TOPIC, value=data)
             
-            # Log successful health status with timestamp
-            print(f"[HEALTH OK] Data sent at {data['fetched_at']}: {data}", flush=True)
+            # Log successful health status
+            logger.info(f"[HEALTH OK] Sent: temp={data['temperature']}°C, "
+                       f"humidity={data['humidity']}%, "
+                       f"wind={data['wind_speed']}km/h, "
+                       f"at={data['fetched_at']}")
             
             # Wait 10 seconds before next measurement
             time.sleep(10)
@@ -134,9 +152,8 @@ def main():
                 "message": "API request timed out",
                 "fetched_at": datetime.utcnow().isoformat()
             }
-            # Send error status to Redpanda so consumers know data is missing
             producer.send(TOPIC, value=error)
-            print(f"[HEALTH ERROR] API timeout at {error['fetched_at']}", flush=True)
+            logger.warning(f"[HEALTH WARNING] API timeout at {error['fetched_at']}")
             time.sleep(10)
             
         except requests.exceptions.ConnectionError:
@@ -147,14 +164,13 @@ def main():
                 "message": "API is unavailable",
                 "fetched_at": datetime.utcnow().isoformat()
             }
-            # Send error status to Redpanda
             producer.send(TOPIC, value=error)
-            print(f"[HEALTH ERROR] API unavailable at {error['fetched_at']}", flush=True)
+            logger.error(f"[HEALTH ERROR] API unavailable at {error['fetched_at']}")
             time.sleep(10)
             
         except Exception as e:
             # Unexpected error - log and continue
-            print(f"[HEALTH ERROR] Unexpected error: {e}", flush=True)
+            logger.error(f"[HEALTH ERROR] Unexpected error: {e}")
             time.sleep(5)
 
 # Entry point: run main function when script is executed
