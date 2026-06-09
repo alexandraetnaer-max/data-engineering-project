@@ -39,6 +39,8 @@ services:
       - "27017:27017"  # MongoDB default port
     environment:
       MONGO_INITDB_DATABASE: sensordata  # Create database on startup
+    volumes:
+      - mongodb_data:/data/db  # Persist data on local disk
 
   # ---------------------------------------------------------------------------
   # PRODUCER - Fetches data from Open-Meteo API and sends to Redpanda
@@ -71,3 +73,11 @@ services:
     environment:
       - KAFKA_BROKER=redpanda:9092          # Redpanda connection address
       - MONGO_URI=mongodb://mongodb:27017/  # MongoDB connection address
+
+# =============================================================================
+# VOLUMES
+# Named volumes for persistent data storage
+# Data survives container restarts and updates
+# =============================================================================
+volumes:
+  mongodb_data:  # Stores all MongoDB sensor measurements permanently
