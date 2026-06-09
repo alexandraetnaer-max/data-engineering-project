@@ -132,14 +132,21 @@ def main():
             # Fetch fresh sensor data from API
             data = get_sensor_data()
             
-            # Send data to Redpanda topic
-            producer.send(TOPIC, value=data)
+            # Send data to Redpanda topic and wait for confirmation
+            future = producer.send(TOPIC, value=data)
             
-            # Log successful health status
+            # Wait up to 10 seconds for delivery confirmation
+            # Raises exception if message was not delivered
+            record_metadata = future.get(timeout=10)
+            
+            # Log successful health status with delivery confirmation
             logger.info(f"[HEALTH OK] Sent: temp={data['temperature']}°C, "
                        f"humidity={data['humidity']}%, "
                        f"wind={data['wind_speed']}km/h, "
-                       f"at={data['fetched_at']}")
+                       f"at={data['fetched_at']} "
+                       f"(topic={record_metadata.topic}, "
+                       f"partition={record_metadata.partition}, "
+                       f"offset={record_metadata.offset})")
             
             # Wait 10 seconds before next measurement
             time.sleep(10)
@@ -152,7 +159,8 @@ def main():
                 "message": "API request timed out",
                 "fetched_at": datetime.utcnow().isoformat()
             }
-            producer.send(TOPIC, value=error)
+            future = producer.send(TOPIC, value=error)
+            future.get(timeout=10)
             logger.warning(f"[HEALTH WARNING] API timeout at {error['fetched_at']}")
             time.sleep(10)
             
