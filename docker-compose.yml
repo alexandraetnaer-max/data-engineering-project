@@ -26,7 +26,7 @@ services:
       - --kafka-addr PLAINTEXT://0.0.0.0:9092       # Listen on all interfaces
       - --advertise-kafka-addr PLAINTEXT://redpanda:9092  # Advertise address
     ports:
-      - "9092:9092"  # Kafka API port
+      - "9092:9092"  
 
   # ---------------------------------------------------------------------------
   # MONGODB - NoSQL database for storing sensor measurements
@@ -36,11 +36,11 @@ services:
     image: mongo:6.0.14
     container_name: mongodb
     ports:
-      - "27017:27017"  # MongoDB default port
+      - "27017:27017"  
     environment:
-      MONGO_INITDB_DATABASE: sensordata  # Create database on startup
+      MONGO_INITDB_DATABASE: sensordata  
     volumes:
-      - mongodb_data:/data/db  # Persist data on local disk
+      - mongodb_data:/data/db  
 
   # ---------------------------------------------------------------------------
   # PRODUCER - Fetches data from Open-Meteo API and sends to Redpanda
@@ -49,13 +49,13 @@ services:
   producer:
     build:
       context: .
-      dockerfile: Dockerfile.producer  # Build from Dockerfile.producer
+      dockerfile: Dockerfile.producer  
     container_name: producer
-    restart: unless-stopped    # Auto-restart if container crashes
+    restart: unless-stopped    
     depends_on:
-      - redpanda   # Wait for Redpanda to start first
+      - redpanda   
     environment:
-      - KAFKA_BROKER=redpanda:9092  # Redpanda connection address
+      - KAFKA_BROKER=redpanda:9092 
 
   # ---------------------------------------------------------------------------
   # CONSUMER - Reads messages from Redpanda and stores in MongoDB
@@ -64,15 +64,15 @@ services:
   consumer:
     build:
       context: .
-      dockerfile: Dockerfile.consumer  # Build from Dockerfile.consumer
+      dockerfile: Dockerfile.consumer 
     container_name: consumer
-    restart: unless-stopped    # Auto-restart if container crashes
+    restart: unless-stopped    
     depends_on:
-      - redpanda   # Wait for Redpanda to start first
-      - mongodb    # Wait for MongoDB to start first
+      - redpanda   
+      - mongodb    
     environment:
-      - KAFKA_BROKER=redpanda:9092          # Redpanda connection address
-      - MONGO_URI=mongodb://mongodb:27017/  # MongoDB connection address
+      - KAFKA_BROKER=redpanda:9092          
+      - MONGO_URI=mongodb://mongodb:27017/  
 
 # =============================================================================
 # VOLUMES
@@ -80,4 +80,4 @@ services:
 # Data survives container restarts and updates
 # =============================================================================
 volumes:
-  mongodb_data:  # Stores all MongoDB sensor measurements permanently
+  mongodb_data:  

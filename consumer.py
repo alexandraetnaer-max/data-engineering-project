@@ -134,15 +134,15 @@ def main():
             # Store measurement document in MongoDB
             collection.insert_one(data)
 
-            # Log based on health status
+            
             if data.get('status') == 'ok':
-                # Normal sensor reading - log success
+                
                 logger.info(f"[OK] Saved: temp={data.get('temperature')}°C, "
                            f"humidity={data.get('humidity')}%, "
                            f"wind={data.get('wind_speed')}km/h, "
                            f"at={data.get('fetched_at')}")
             else:
-                # Health error from producer - log warning
+                
                 logger.warning(f"[HEALTH WARNING] Error received: "
                               f"type={data.get('error_type')}, "
                               f"message={data.get('message')}, "
@@ -152,6 +152,6 @@ def main():
             # Unexpected error - log and continue processing
             logger.error(f"[ERROR] Failed to save to MongoDB: {e}")
 
-# Entry point: run main function when script is executed
+
 if __name__ == "__main__":
     main()

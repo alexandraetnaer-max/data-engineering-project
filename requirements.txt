@@ -4,11 +4,8 @@
 # Install with: pip install -r requirements.txt
 # =============================================================================
 
-# Kafka client - for connecting to Redpanda (Kafka-compatible broker)
 kafka-python==2.0.2
 
-# MongoDB client - for storing sensor data in MongoDB
 pymongo==4.6.1
 
-# HTTP requests - for fetching data from Open-Meteo API
 requests==2.31.0

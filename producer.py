@@ -99,16 +99,15 @@ def get_sensor_data():
     # Raise exception if HTTP error occurred (e.g. 404, 500)
     response.raise_for_status()
     
-    # Parse JSON response
     data = response.json()
     current = data["current"]
     
     # Return structured sensor reading with health status
     return {
         "timestamp": current["time"],
-        "temperature": current["temperature_2m"],   # Celsius
-        "humidity": current["relative_humidity_2m"], # Percent
-        "wind_speed": current["wind_speed_10m"],     # km/h
+        "temperature": current["temperature_2m"],   
+        "humidity": current["relative_humidity_2m"],
+        "wind_speed": current["wind_speed_10m"],    
         "location": "Berlin",
         "status": "ok",
         "fetched_at": datetime.utcnow().isoformat()  # UTC timestamp for health monitoring
@@ -125,7 +124,7 @@ def main():
     # Wait for Redpanda using healthcheck retry loop
     producer = wait_for_kafka()
 
-    # Main data collection loop: runs continuously
+    
     while True:
         try:
             # Fetch fresh sensor data from API
@@ -134,7 +133,7 @@ def main():
             # Send data to Redpanda topic and wait for confirmation
             future = producer.send(TOPIC, value=data)
             
-            # Wait up to 10 seconds for delivery confirmation
+            
             # Raises exception if message was not delivered
             record_metadata = future.get(timeout=10)
             
@@ -176,7 +175,7 @@ def main():
             time.sleep(10)
             
         except Exception as e:
-            # Unexpected error - log and continue
+            
             logger.error(f"[HEALTH ERROR] Unexpected error: {e}")
             time.sleep(5)
 
