@@ -14,9 +14,61 @@ It collects weather measurements from the Open-Meteo API and streams them throug
 
 
 
-\*\*Data flow:\*\*
+**Data flow:**
+┌─────────────────────┐     every 10s      ┌──────────────┐
 
-Open-Meteo API → Producer → Redpanda → Consumer → MongoDB
+│   Open-Meteo API    │ ─────────────────► │   Producer   │
+
+│  (Weather Data)     │                    │  (Python)    │
+
+│  temperature        │                    └──────┬───────┘
+
+│  humidity           │                           │
+
+│  wind speed         │                    publish│message
+
+└─────────────────────┘                           │
+
+┌──────▼───────┐
+
+│   Redpanda   │
+
+│   (Kafka)    │
+
+│  topic:      │
+
+│  sensor-data │
+
+└──────┬───────┘
+
+│
+
+consume│message
+
+│
+
+┌──────▼───────┐     ┌─────────────┐
+
+│   Consumer   │────►│   MongoDB   │
+
+│  (Python)    │     │  sensordata │
+
+└──────────────┘     │ .measurements│
+
+└─────────────┘
+Health Monitoring:
+
+┌─────────────────────────────────────────────────────────┐
+
+│  Producer checks API status every request:              │
+
+│  ✅ [HEALTH OK]      → data sent successfully           │
+
+│  ⚠️  [HEALTH WARNING] → API timeout (>10s)              │
+
+│  ❌ [HEALTH ERROR]   → API connection failed            │
+
+└─────────────────────────────────────────────────────────┘
 
 
 
