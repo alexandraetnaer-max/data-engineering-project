@@ -6,7 +6,7 @@
 
 import unittest
 from unittest.mock import patch, MagicMock
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 
 
@@ -38,7 +38,7 @@ def get_sensor_data():
         "wind_speed": current["wind_speed_10m"],
         "location": "Berlin",
         "status": "ok",
-        "fetched_at": datetime.now(datetime.UTC).isoformat()
+        "fetched_at": datetime.now(timezone.utc).isoformat()
     }
 
 
