@@ -6,14 +6,14 @@
 # Uses Python logging module for professional log output
 # =============================================================================
 
-import requests      # For making HTTP requests to Open-Meteo API
-import json          # For converting data to JSON format
-import time          # For adding delays between retries
-import logging       # For professional logging with levels and timestamps
-from kafka import KafkaProducer  # For sending messages to Redpanda
-from kafka.errors import NoBrokersAvailable  # Specific Kafka connection error
-import os            # For reading environment variables
-from datetime import datetime    # For timestamps in health monitoring
+import requests
+import json
+import time
+import logging
+from kafka import KafkaProducer
+from kafka.errors import NoBrokersAvailable
+import os
+from datetime import datetime
 
 # =============================================================================
 # LOGGING CONFIGURATION
@@ -29,13 +29,12 @@ logger = logging.getLogger(__name__)  # Create logger for this module
 
 # =============================================================================
 # CONFIGURATION
-# These values are read from environment variables (set in docker-compose.yml)
+# Read from environment variables defined in docker-compose.yml
 # =============================================================================
-KAFKA_BROKER = os.environ.get('KAFKA_BROKER', 'localhost:9092')  # Redpanda address
-TOPIC = 'sensor-data'  # Name of the Kafka topic to send data to
-MAX_RETRIES = 10        # Maximum number of connection attempts
-RETRY_DELAY = 5         # Seconds to wait between retries
-
+KAFKA_BROKER = os.environ.get('KAFKA_BROKER', 'localhost:9092')
+TOPIC = 'sensor-data'
+MAX_RETRIES = 10
+RETRY_DELAY = 5  # Seconds between retries
 # =============================================================================
 # FUNCTION: wait_for_kafka
 # Retries connection to Redpanda until successful or max retries reached
@@ -84,12 +83,12 @@ def get_sensor_data():
     
     # Parameters: location (Berlin), measurements to fetch, timezone
     params = {
-        "latitude": 52.52,           # Berlin latitude
-        "longitude": 13.41,          # Berlin longitude
+        "latitude": 52.52,
+        "longitude": 13.41,
         "current": [
-            "temperature_2m",        # Temperature at 2 meters height
-            "relative_humidity_2m",  # Relative humidity at 2 meters
-            "wind_speed_10m"         # Wind speed at 10 meters height
+            "temperature_2m",
+            "relative_humidity_2m",
+            "wind_speed_10m"
         ],
         "timezone": "Europe/Berlin"
     }
@@ -106,13 +105,13 @@ def get_sensor_data():
     
     # Return structured sensor reading with health status
     return {
-        "timestamp": current["time"],                    # Time of measurement
-        "temperature": current["temperature_2m"],        # Temperature in Celsius
-        "humidity": current["relative_humidity_2m"],     # Humidity in percent
-        "wind_speed": current["wind_speed_10m"],         # Wind speed in km/h
-        "location": "Berlin",                            # Sensor location
-        "status": "ok",                                  # Health status: ok
-        "fetched_at": datetime.utcnow().isoformat()      # Exact fetch timestamp
+        "timestamp": current["time"],
+        "temperature": current["temperature_2m"],   # Celsius
+        "humidity": current["relative_humidity_2m"], # Percent
+        "wind_speed": current["wind_speed_10m"],     # km/h
+        "location": "Berlin",
+        "status": "ok",
+        "fetched_at": datetime.utcnow().isoformat()  # UTC timestamp for health monitoring
     }
 
 # =============================================================================

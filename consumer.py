@@ -6,14 +6,14 @@
 # Uses Python logging module for professional log output
 # =============================================================================
 
-import json          # For deserializing JSON messages from Redpanda
-import time          # For adding delays between retries
-import logging       # For professional logging with levels and timestamps
-from kafka import KafkaConsumer  # For reading messages from Redpanda
-from kafka.errors import NoBrokersAvailable  # Specific Kafka connection error
-from pymongo import MongoClient  # For connecting to MongoDB database
-from pymongo.errors import ConnectionFailure  # Specific MongoDB connection error
-import os            # For reading environment variables
+import json
+import time
+import logging
+from kafka import KafkaConsumer
+from kafka.errors import NoBrokersAvailable
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
+import os
 
 # =============================================================================
 # LOGGING CONFIGURATION
@@ -29,13 +29,13 @@ logger = logging.getLogger(__name__)  # Create logger for this module
 
 # =============================================================================
 # CONFIGURATION
-# These values are read from environment variables (set in docker-compose.yml)
+# Read from environment variables defined in docker-compose.yml
 # =============================================================================
-KAFKA_BROKER = os.environ.get('KAFKA_BROKER', 'localhost:9092')  # Redpanda address
-MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')  # MongoDB address
-TOPIC = 'sensor-data'   # Name of the Kafka topic to read from
-MAX_RETRIES = 10         # Maximum number of connection attempts
-RETRY_DELAY = 5          # Seconds to wait between retries
+KAFKA_BROKER = os.environ.get('KAFKA_BROKER', 'localhost:9092')
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
+TOPIC = 'sensor-data'
+MAX_RETRIES = 10
+RETRY_DELAY = 5  # Seconds between retries
 
 # =============================================================================
 # FUNCTION: wait_for_kafka
@@ -49,36 +49,28 @@ def wait_for_kafka():
             attempt += 1
             logger.info(f"[KAFKA] Connection attempt {attempt}/{MAX_RETRIES}...")
             
-            # Try to create Kafka consumer - will fail if Redpanda not ready
             consumer = KafkaConsumer(
-                TOPIC,                          # Topic to read from
-                bootstrap_servers=KAFKA_BROKER, # Redpanda address
-                # Deserialize JSON bytes to Python dict
+                TOPIC,
+                bootstrap_servers=KAFKA_BROKER,
                 value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-                # Start from beginning if no offset exists
-                auto_offset_reset='earliest',
-                # Consumer group ID for offset tracking
-                group_id='sensor-group',
-                # Timeout for connection attempt in milliseconds
+                auto_offset_reset='earliest',  # Start from beginning if no offset exists
+                group_id='sensor-group',       # Consumer group for offset tracking
                 request_timeout_ms=30000
             )
             logger.info("[KAFKA] Successfully connected to Redpanda!")
             return consumer
             
         except NoBrokersAvailable:
-            # Redpanda not ready yet - wait and retry
             logger.warning(f"[KAFKA] No brokers available. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
             
         except Exception as e:
-            # Other connection error - wait and retry
             logger.error(f"[KAFKA] Connection failed: {e}. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
     
-    # All retries exhausted
     logger.critical(f"[KAFKA] Could not connect after {MAX_RETRIES} attempts. Exiting.")
     raise RuntimeError(f"Could not connect to Redpanda after {MAX_RETRIES} attempts")
-
+    
 # =============================================================================
 # FUNCTION: wait_for_mongodb
 # Retries connection to MongoDB until successful or max retries reached
@@ -98,19 +90,17 @@ def wait_for_mongodb():
             client.admin.command('ping')
             
             # Select database and collection
-            db = client['sensordata']           # Database name
-            collection = db['measurements']     # Collection (table) name
+            db = client['sensordata']           
+            collection = db['measurements']     
             
             logger.info("[MONGODB] Successfully connected to MongoDB!")
             return collection
             
         except ConnectionFailure:
-            # MongoDB not ready yet - wait and retry
             logger.warning(f"[MONGODB] Not available. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
             
         except Exception as e:
-            # Other connection error - wait and retry
             logger.error(f"[MONGODB] Connection failed: {e}. Retrying in {RETRY_DELAY}s...")
             time.sleep(RETRY_DELAY)
     
