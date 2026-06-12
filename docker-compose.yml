@@ -1,83 +1,65 @@
-# =============================================================================
-# DOCKER COMPOSE FILE
-# Purpose: Defines and orchestrates all containers for the stream processing
-#          pipeline. Run with: docker-compose up --build
-# =============================================================================
+# Stream processing pipeline: Producer → Redpanda → Consumer → MongoDB
+# Run with: docker-compose up --build
 
 
 
 services:
 
-  # ---------------------------------------------------------------------------
-  # REDPANDA - Kafka-compatible message broker
-  # Receives data from producer and distributes it to consumer
-  # Lightweight alternative to Apache Kafka
-  # ---------------------------------------------------------------------------
+  # Redpanda: Kafka-compatible message broker
+  # Lightweight single-node setup for local development
   redpanda:
     image: redpandadata/redpanda:v23.3.11
     container_name: redpanda
     command:
       - redpanda start
-      - --smp 1                    # Use 1 CPU core (resource saving)
-      - --memory 512M              # Limit memory to 512MB
-      - --reserve-memory 0M        # No reserved memory
-      - --overprovisioned          # Optimize for local development
-      - --node-id 0                # Single node setup
-      - --kafka-addr PLAINTEXT://0.0.0.0:9092       # Listen on all interfaces
-      - --advertise-kafka-addr PLAINTEXT://redpanda:9092  # Advertise address
+      - --smp 1                    # Use 1 CPU core
+      - --memory 512M              # Limit memory usage
+      - --reserve-memory 0M
+      - --overprovisioned          # Optimize for local/dev environment
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
     ports:
-      - "9092:9092"  # Kafka API port
+      - "9092:9092"
 
-  # ---------------------------------------------------------------------------
-  # MONGODB - NoSQL database for storing sensor measurements
-  # Chosen for flexible schema - future sensors can add new fields easily
-  # ---------------------------------------------------------------------------
+  # MongoDB: stores incoming sensor measurements
+  # Flexible schema allows future sensors to add new fields
   mongodb:
     image: mongo:6.0.14
     container_name: mongodb
     ports:
-      - "27017:27017"  # MongoDB default port
+      - "27017:27017"
     environment:
-      MONGO_INITDB_DATABASE: sensordata  # Create database on startup
+      MONGO_INITDB_DATABASE: sensordata
     volumes:
-      - mongodb_data:/data/db  # Persist data on local disk
+      - mongodb_data:/data/db
 
-  # ---------------------------------------------------------------------------
-  # PRODUCER - Fetches data from Open-Meteo API and sends to Redpanda
-  # Includes health monitoring: logs errors if API is unavailable
-  # ---------------------------------------------------------------------------
+  # Producer: fetches weather data from Open-Meteo API and publishes to Redpanda
+  # Health events (timeouts, API errors) are also forwarded to the topic
   producer:
     build:
       context: .
-      dockerfile: Dockerfile.producer  # Build from Dockerfile.producer
+      dockerfile: Dockerfile.producer
     container_name: producer
-    restart: unless-stopped    # Auto-restart if container crashes
+    restart: unless-stopped
     depends_on:
-      - redpanda   # Wait for Redpanda to start first
+      - redpanda
     environment:
-      - KAFKA_BROKER=redpanda:9092  # Redpanda connection address
+      - KAFKA_BROKER=redpanda:9092
 
-  # ---------------------------------------------------------------------------
-  # CONSUMER - Reads messages from Redpanda and stores in MongoDB
-  # Logs health warnings if error messages are received from producer
-  # ---------------------------------------------------------------------------
+  # Consumer: reads messages from Redpanda and stores them in MongoDB
   consumer:
     build:
       context: .
-      dockerfile: Dockerfile.consumer  # Build from Dockerfile.consumer
+      dockerfile: Dockerfile.consumer
     container_name: consumer
-    restart: unless-stopped    # Auto-restart if container crashes
+    restart: unless-stopped
     depends_on:
-      - redpanda   # Wait for Redpanda to start first
-      - mongodb    # Wait for MongoDB to start first
+      - redpanda
+      - mongodb
     environment:
-      - KAFKA_BROKER=redpanda:9092          # Redpanda connection address
-      - MONGO_URI=mongodb://mongodb:27017/  # MongoDB connection address
+      - KAFKA_BROKER=redpanda:9092
+      - MONGO_URI=mongodb://mongodb:27017/
 
-# =============================================================================
-# VOLUMES
-# Named volumes for persistent data storage
-# Data survives container restarts and updates
-# =============================================================================
 volumes:
-  mongodb_data:  # Stores all MongoDB sensor measurements permanently
+  mongodb_data:
