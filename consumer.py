@@ -9,24 +9,13 @@
 import json
 import time
 import logging
-import signal
-import sys
+
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 import os
 
-# =============================================================================
-# GRACEFUL SHUTDOWN HANDLER
-# Catches SIGTERM/SIGINT signals and shuts down cleanly
-# =============================================================================
-def handle_shutdown(signum, frame):
-    logger.info("Shutdown signal received. Closing consumer gracefully...")
-    sys.exit(0)
-
-signal.signal(signal.SIGTERM, handle_shutdown)
-signal.signal(signal.SIGINT, handle_shutdown)
 
 # =============================================================================
 # LOGGING CONFIGURATION

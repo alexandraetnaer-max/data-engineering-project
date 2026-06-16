@@ -10,23 +10,12 @@ import requests
 import json
 import time
 import logging
-import signal
-import sys
+
 from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable
 import os
 from datetime import datetime, timezone
 
-# =============================================================================
-# GRACEFUL SHUTDOWN HANDLER
-# Catches SIGTERM/SIGINT signals and shuts down cleanly
-# =============================================================================
-def handle_shutdown(signum, frame):
-    logger.info("Shutdown signal received. Closing producer gracefully...")
-    sys.exit(0)
-
-signal.signal(signal.SIGTERM, handle_shutdown)
-signal.signal(signal.SIGINT, handle_shutdown)
 
 # =============================================================================
 # LOGGING CONFIGURATION
